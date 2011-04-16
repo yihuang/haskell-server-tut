@@ -1,13 +1,19 @@
+import System.IO
+import Data.Maybe
 import Text.Printf
 import Network
-import System.IO
 import Control.Monad
 import Control.Concurrent
 
+data Request = Hello Int
+  deriving (Show, Read)
+
+maybeRead = fmap fst . listToMaybe . reads
+
 handleLine :: String -> String
-handleLine req = case words req of
-  ["hello", arg] -> "hello " ++ (show.(+1).read) arg
-  otherwise -> "unknown request"
+handleLine req = case maybeRead req of
+  Just (Hello seq) -> show . Hello $ seq+1
+  _ -> "bad request"
 
 handleClient :: Handle -> HostName -> PortNumber -> IO ()
 handleClient csock chost cport = forever $ do
