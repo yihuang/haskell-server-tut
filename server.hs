@@ -1,5 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 import System.IO
+import System.Exit
+import System.Posix.Signals
 import Data.Maybe
 import Text.Printf
 import Network
@@ -24,6 +26,9 @@ data Env = Env {
 newtype ServerMT m a = ServerMT (StateT Env m a)
   deriving (Functor, Monad, MonadState Env)
 
+instance MonadTrans ServerMT where
+  lift = ServerMT . lift
+
 runServerMT :: Env -> ServerMT m a -> m (a, Env)
 runServerMT env (ServerMT m) = runStateT m env
 
@@ -45,12 +50,12 @@ handleClient (csock, chost, cport) env = do
   forever $ do
     req <- hGetLine csock
     putStrLn $ printf "recved %s from %s" req (show cport)
-    threadDelay (1000*1000*1)
+    -- threadDelay (1000*1000*1)
     modifyMVar_ env $ \env -> do
       (rep, env) <- runServerMT env . handleLine $ req
       hPutStrLn csock rep
       putStrLn $ printf "sended %s to %s" rep (show cport)
-      return env{ requests=(requests env)+1 }
+      return env{requests=(requests env)+1}
 
 main = do
   withSocketsDo $ do
@@ -59,6 +64,10 @@ main = do
       clients=0,
       requests=0
     }
+    installHandler
+      sigQUIT
+      (Catch (readMVar env >>= putStrLn . show))
+      Nothing
     sock <- listenOn (PortNumber port)
     putStrLn $ printf "listening on %s" (show port)
     forever $ do
